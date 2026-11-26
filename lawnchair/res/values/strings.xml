@@ -271,6 +271,9 @@
 
     <!--Overlay-->
     <string name="app_closing_animation">App closing animation</string>
+    <!--Page transition-->
+    <string name="page_transition_cube_label">Cube page effect</string>
+    <string name="page_transition_cube_description">Turns the home screen pages in 3D while swiping between them</string>
     <string name="overlay_fade_in">Fade in</string>
     <string name="overlay_suck_in">Suck in</string>
     <string name="overlay_label">Overlay</string>

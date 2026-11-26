@@ -80,6 +80,20 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     public static final int INVALID_PAGE = -1;
     protected static final ComputePageScrollsLogic SIMPLE_SCROLL_LOGIC = (v) -> v.getVisibility() != GONE;
 
+    /** Page transition effects available to subclasses through {@link #setPageTransitionEffect}. */
+    public static final int PAGE_TRANSITION_NONE = 0;
+    /** Pages are rotated in 3D around the edge they share with the neighbouring page. */
+    public static final int PAGE_TRANSITION_CUBE = 1;
+
+    private static final float CUBE_MAX_ROTATION = 90f;
+    private static final float CUBE_CAMERA_DISTANCE_FACTOR = 3f;
+    private static final float DEFAULT_CAMERA_DISTANCE_DP = 1280f;
+
+    private int mPageTransitionEffect = PAGE_TRANSITION_NONE;
+    private boolean mPageTransitionActive;
+    private Boolean mOriginalClipChildren;
+    private float mDefaultCameraDistance = -1;
+
     private static final float RETURN_TO_ORIGINAL_PAGE_THRESHOLD = 0.33f;
     // The page is moved more than halfway, automatically move to the next page on touch up.
     private static final float SIGNIFICANT_MOVE_THRESHOLD = 0.4f;
@@ -2113,8 +2127,117 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
         return mTmpIntPair;
     }
 
+    /**
+     * Selects the effect used while the user pages between children.
+     *
+     * <p>{@link #PAGE_TRANSITION_NONE} leaves every page untouched, so a caller that never
+     * invokes this keeps exactly the stock behaviour.</p>
+     */
+    public void setPageTransitionEffect(int effect) {
+        if (mPageTransitionEffect == effect) {
+            return;
+        }
+        mPageTransitionEffect = effect;
+        if (effect == PAGE_TRANSITION_NONE) {
+            resetPageTransitions();
+            if (mOriginalClipChildren != null) {
+                setClipChildren(mOriginalClipChildren);
+            }
+        } else {
+            if (mOriginalClipChildren == null) {
+                mOriginalClipChildren = getClipChildren();
+            }
+            setClipChildren(false);
+        }
+        invalidate();
+    }
+
+    public int getPageTransitionEffect() {
+        return mPageTransitionEffect;
+    }
+
+    private float getDefaultCameraDistance() {
+        if (mDefaultCameraDistance < 0) {
+            mDefaultCameraDistance = DEFAULT_CAMERA_DISTANCE_DP
+                    * getResources().getDisplayMetrics().density;
+        }
+        return mDefaultCameraDistance;
+    }
+
+    /**
+     * Applies the per-page transform for the current scroll position. Called once per frame from
+     * {@link #draw(Canvas)}, i.e. before the children are drawn.
+     */
+    private void updatePageTransition() {
+        if (mPageTransitionEffect == PAGE_TRANSITION_NONE) {
+            if (mPageTransitionActive) {
+                resetPageTransitions();
+            }
+            return;
+        }
+        final int viewportWidth = getWidth() - getPaddingLeft() - getPaddingRight();
+        if (viewportWidth <= 0 || getPanelCount() > 1) {
+            resetPageTransitions();
+            return;
+        }
+
+        final int scrollX = getScrollX();
+        final float viewportCenter = getPaddingLeft() + viewportWidth / 2f;
+        final float cameraDistance = viewportWidth * CUBE_CAMERA_DISTANCE_FACTOR;
+        boolean active = false;
+
+        for (int i = 0; i < getChildCount(); i++) {
+            final View child = getChildAt(i);
+            if (child.getVisibility() != VISIBLE || child.getWidth() == 0) {
+                continue;
+            }
+            final float pageWidth = child.getWidth();
+            final float center = child.getLeft() - scrollX + pageWidth / 2f;
+            float fraction = (center - viewportCenter) / pageWidth;
+            if (mIsRtl) {
+                fraction = -fraction;
+            }
+            if (Math.abs(fraction) >= 1f) {
+                // Fully outside the viewport: make sure no stale transform survives.
+                resetPageTransition(child);
+                continue;
+            }
+            if (Math.abs(fraction) < 0.001f) {
+                resetPageTransition(child);
+                continue;
+            }
+            active = true;
+            child.setPivotY(child.getHeight() / 2f);
+            // The page turns around the edge it shares with its neighbour.
+            child.setPivotX(fraction > 0 ? 0f : pageWidth);
+            child.setRotationY(-CUBE_MAX_ROTATION * fraction);
+            child.setCameraDistance(cameraDistance);
+        }
+        mPageTransitionActive = active;
+    }
+
+    private void resetPageTransitions() {
+        for (int i = 0; i < getChildCount(); i++) {
+            resetPageTransition(getChildAt(i));
+        }
+        mPageTransitionActive = false;
+    }
+
+    private void resetPageTransition(View child) {
+        if (child == null) {
+            return;
+        }
+        if (child.getRotationY() != 0f) {
+            child.setRotationY(0f);
+        }
+        child.setPivotX(child.getWidth() / 2f);
+        child.setPivotY(child.getHeight() / 2f);
+        child.setCameraDistance(getDefaultCameraDistance());
+    }
+
     @Override
     public void draw(Canvas canvas) {
+        updatePageTransition();
         if (!Utilities.ATLEAST_S) drawStretchEdgeEffect(canvas);
         super.draw(canvas);
         if (Utilities.ATLEAST_S) drawEdgeEffect(canvas);

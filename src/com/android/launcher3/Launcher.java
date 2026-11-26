@@ -256,6 +256,7 @@ import com.android.launcher3.views.FloatingIconView;
 import com.android.launcher3.views.FloatingSurfaceView;
 import com.android.launcher3.views.OptionsPopupView;
 import app.lawnchair.views.EditModePageStrip;
+import app.lawnchair.preferences2.PreferenceManager2;
 import com.android.launcher3.views.ScrimView;
 import com.android.launcher3.widget.LauncherAppWidgetHostView;
 import com.android.launcher3.widget.LauncherAppWidgetProviderInfo;
@@ -1241,7 +1242,21 @@ public class Launcher extends StatefulActivity<LauncherState>
         }
 
         DragView.removeAllViews(this);
+        applyPageTransitionEffect();
         TraceHelper.INSTANCE.endSection();
+    }
+
+    /**
+     * Applies the home screen page transition selected in the preferences. Reading the preference
+     * here keeps the value in sync when the user comes back from the settings screen.
+     */
+    private void applyPageTransitionEffect() {
+        if (mWorkspace == null) {
+            return;
+        }
+        final boolean cube = PreferenceManager2.getInstance(this).isCubePageTransitionEnabled();
+        mWorkspace.setPageTransitionEffect(
+                cube ? PagedView.PAGE_TRANSITION_CUBE : PagedView.PAGE_TRANSITION_NONE);
     }
 
     @Override

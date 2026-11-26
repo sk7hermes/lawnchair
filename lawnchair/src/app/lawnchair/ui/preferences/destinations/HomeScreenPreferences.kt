@@ -163,6 +163,11 @@ fun HomeScreenPreferences(
                 adapter = prefs2.closingAppOverlay.getAdapter(),
                 label = stringResource(id = R.string.app_closing_animation),
             )
+            SwitchPreference(
+                adapter = prefs2.cubePageTransition.getAdapter(),
+                label = stringResource(id = R.string.page_transition_cube_label),
+                description = stringResource(id = R.string.page_transition_cube_description),
+            )
         }
         PreferenceGroup(heading = stringResource(id = R.string.wallpaper)) {
             SwitchPreference(

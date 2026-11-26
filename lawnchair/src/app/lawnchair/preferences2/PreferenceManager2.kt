@@ -810,6 +810,18 @@ class PreferenceManager2 @Inject constructor(
         onSet = { reloadHelper.recreate() },
     )
 
+    /** 3D page transition used while swiping between home screen pages. */
+    val cubePageTransition = preference(
+        key = booleanPreferencesKey(name = "page_transition_cube"),
+        defaultValue = false,
+    )
+
+    /**
+     * Blocking read for Java call sites that apply the effect on the main thread (once per
+     * resume). The value is served from the in-memory preference cache.
+     */
+    fun isCubePageTransitionEnabled(): Boolean = cubePageTransition.firstBlocking()
+
     val deckLayout = preference(
         key = booleanPreferencesKey(name = "enable_lawn_deck"),
         defaultValue = false,
