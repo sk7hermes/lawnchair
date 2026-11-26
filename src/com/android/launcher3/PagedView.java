@@ -2210,7 +2210,7 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
             child.setPivotY(child.getHeight() / 2f);
             // The page turns around the edge it shares with its neighbour.
             child.setPivotX(fraction > 0 ? 0f : pageWidth);
-            child.setRotationY(-CUBE_MAX_ROTATION * fraction);
+            child.setRotationY(CUBE_MAX_ROTATION * fraction);
             child.setCameraDistance(cameraDistance);
         }
         mPageTransitionActive = active;
