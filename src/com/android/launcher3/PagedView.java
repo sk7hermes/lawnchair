@@ -99,10 +99,13 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     /** Forward push towards the viewer, as a fraction of the viewport width. */
     private static final float CUBE_DEPTH_GAIN = 0.10f;
     private static final float CUBE_CAMERA_DENSITY = 800f;
-    private static final float TABLET_MAX_ROTATION = 12.5f;
-    private static final float FLIP_MAX_ROTATION = -180f;
-    private static final float GLASS_MAX_ROTATION = 12.5f;
-    private static final float GLASS_SCALE_DROP = 0.3f;
+    private static final float TABLET_ANGLE = 20f;
+    private static final float TABLET_CAMERA_PAGES = 1.5f;
+    private static final float CAMERA_UNITS_PER_INCH = 72f;
+    private static final float FLIP_MAX_ROTATION = 90f;
+    private static final float FLIP_CAMERA_DENSITY = 12000f;
+    private static final float IN_AND_OUT_DEPTH = 0.3f;
+    private static final float GLASS_SCALE_GAIN = 0.08f;
     private static final float CUBE_FADE_START = 0.85f;
     private static final float DEFAULT_CAMERA_DISTANCE_DP = 1280f;
 
@@ -2202,7 +2205,6 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
 
         final int scrollX = getScrollX();
         final float viewportCenter = getPaddingLeft() + viewportWidth / 2f;
-        final float cameraDistance = getCubeCameraDistance();
         boolean active = false;
 
         for (int i = 0; i < getChildCount(); i++) {
@@ -2224,7 +2226,7 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
             }
             active = true;
             child.setPivotY(child.getHeight() / 2f);
-            child.setCameraDistance(cameraDistance);
+            child.setCameraDistance(getCubeCameraDistance());
             applyPageTransition(child, fraction, distance, pageWidth, viewportWidth);
         }
         mPageTransitionActive = active;
@@ -2234,8 +2236,10 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     private void applyPageTransition(View child, float fraction, float distance,
             float pageWidth, int viewportWidth) {
         child.setTranslationX(0f);
+        child.setTranslationY(0f);
         child.setTranslationZ(0f);
         child.setRotationX(0f);
+        child.setRotationY(0f);
         child.setAlpha(1f);
         child.setScaleX(1f);
         child.setScaleY(1f);
@@ -2258,41 +2262,39 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
                 break;
             }
             case PAGE_TRANSITION_TABLET: {
+                // Deep enough camera to make a 20 degree turn read as depth instead of nothing.
+                child.setCameraDistance(getTabletCameraDistance(pageWidth));
                 child.setPivotX(pageWidth / 2f);
-                child.setRotationY(TABLET_MAX_ROTATION * fraction);
+                child.setRotationY(-TABLET_ANGLE * fraction);
                 break;
             }
             case PAGE_TRANSITION_FLIP: {
-                // Both pages are stacked in the middle of the screen and turn around their own
-                // centre, so the incoming page appears as the back of the sheet.
-                child.setTranslationX(-fraction * pageWidth);
+                // The page turns edge-on as it leaves, the next one unfolds from the same edge,
+                // so the two faces read as the two sides of one sheet.
+                child.setCameraDistance(getFlipCameraDistance());
                 child.setPivotX(pageWidth / 2f);
-                final float scale = 1f - 0.5f * (0.5f - Math.abs(0.5f - distance));
-                child.setScaleX(scale);
-                child.setScaleY(scale);
                 child.setRotationY(FLIP_MAX_ROTATION * fraction);
                 // Only the half of the turn that faces the viewer is drawn.
-                child.setAlpha(distance < 0.5f ? 1f : 0f);
+                child.setAlpha(distance > 0.5f ? 0f : 1f);
                 break;
             }
             case PAGE_TRANSITION_IN_AND_OUT: {
-                // The leaving page shrinks towards its outer edge and additionally slides away,
-                // the arriving one only grows while it is carried in by the pager.
-                child.setPivotX(pageWidth);
-                final float scale = Math.max(0.5f, 1f - distance);
+                // Deepest dip exactly between two pages, flat at both ends.
+                final float dip = 1f - Math.abs(1f - 2f * distance);
+                final float scale = 1f - IN_AND_OUT_DEPTH * dip;
+                child.setPivotX(pageWidth / 2f);
                 child.setScaleX(scale);
                 child.setScaleY(scale);
-                child.setTranslationX(fraction < 0f
-                        ? Math.max(-0.5f * pageWidth, fraction * pageWidth)
-                        : 0f);
                 break;
             }
             case PAGE_TRANSITION_GLASS: {
-                child.setPivotX(pageWidth / 2f);
-                final float scale = 1f - GLASS_SCALE_DROP * distance;
+                // Static cross-fade in place; the arriving pane settles down from a small zoom.
+                child.setTranslationX(-fraction * pageWidth);
+                child.setAlpha(Math.max(0f, 1f - distance));
+                final float scale = fraction > 0f ? 1f + GLASS_SCALE_GAIN * fraction : 1f;
                 child.setScaleX(scale);
                 child.setScaleY(scale);
-                child.setRotationY(GLASS_MAX_ROTATION * fraction);
+                child.setTranslationZ(fraction > 0f ? 1f : 0f);
                 break;
             }
             default:
@@ -2307,6 +2309,17 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     private float getCubeCameraDistance() {
         final float density = getResources().getDisplayMetrics().density;
         return CUBE_CAMERA_DENSITY * density * density;
+    }
+
+    private float getFlipCameraDistance() {
+        return FLIP_CAMERA_DENSITY * getResources().getDisplayMetrics().density;
+    }
+
+    private float getTabletCameraDistance(float pageWidth) {
+        // The camera works in 72 units per inch, so deriving the distance from the page width
+        // and the display DPI keeps the tilt consistent across screen sizes.
+        final int densityDpi = getResources().getDisplayMetrics().densityDpi;
+        return pageWidth * TABLET_CAMERA_PAGES * densityDpi / CAMERA_UNITS_PER_INCH;
     }
 
     private void resetPageTransitions() {
