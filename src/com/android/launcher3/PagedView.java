@@ -89,13 +89,14 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     /** Extra size at the middle of the swipe; 0.22 means the page reaches 1.22x. */
     private static final float CUBE_SCALE_GAIN = 0.22f;
     /** Forward push towards the viewer, as a fraction of the viewport width. */
-    private static final float CUBE_DEPTH_GAIN = 0.06f;
-    private static final float CUBE_CAMERA_FACTOR = 2.5f;
+    private static final float CUBE_DEPTH_GAIN = 0.10f;
+    private static final float CUBE_CAMERA_DENSITY = 800f;
     private static final float CUBE_FADE_START = 0.85f;
     private static final float DEFAULT_CAMERA_DISTANCE_DP = 1280f;
 
     private int mPageTransitionEffect = PAGE_TRANSITION_NONE;
     private boolean mPageTransitionActive;
+    private Boolean mOriginalClipChildren;
     private float mDefaultCameraDistance = -1;
 
     private static final float RETURN_TO_ORIGINAL_PAGE_THRESHOLD = 0.33f;
@@ -2144,6 +2145,16 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
         mPageTransitionEffect = effect;
         if (effect == PAGE_TRANSITION_NONE) {
             resetPageTransitions();
+            if (mOriginalClipChildren != null) {
+                setClipChildren(mOriginalClipChildren);
+            }
+        } else {
+            if (mOriginalClipChildren == null) {
+                mOriginalClipChildren = getClipChildren();
+            }
+            // Let the turned pages spill out of the workspace so they can pass behind the
+            // dock while the transition runs.
+            setClipChildren(false);
         }
         invalidate();
     }
@@ -2179,7 +2190,7 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
 
         final int scrollX = getScrollX();
         final float viewportCenter = getPaddingLeft() + viewportWidth / 2f;
-        final float cameraDistance = getCubeCameraDistance(viewportWidth);
+        final float cameraDistance = getCubeCameraDistance();
         boolean active = false;
 
         for (int i = 0; i < getChildCount(); i++) {
@@ -2224,11 +2235,12 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     }
 
     /**
-     * Camera distance for the cube, in pixels, relative to the page width. Larger values flatten
-     * the perspective.
+     * Camera distance for the cube, in pixels. A large distance keeps the perspective shallow, so
+     * the far edge of a turned page does not shrink away to nothing.
      */
-    private float getCubeCameraDistance(int viewportWidth) {
-        return viewportWidth * CUBE_CAMERA_FACTOR;
+    private float getCubeCameraDistance() {
+        final float density = getResources().getDisplayMetrics().density;
+        return CUBE_CAMERA_DENSITY * density * density;
     }
 
     private void resetPageTransitions() {
