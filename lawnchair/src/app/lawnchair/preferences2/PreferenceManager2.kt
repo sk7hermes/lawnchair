@@ -810,17 +810,26 @@ class PreferenceManager2 @Inject constructor(
         onSet = { reloadHelper.recreate() },
     )
 
-    /** 3D page transition used while swiping between home screen pages. */
+    /** Legacy switch, kept so an existing "on" selection survives the upgrade to a list. */
     val cubePageTransition = preference(
         key = booleanPreferencesKey(name = "page_transition_cube"),
         defaultValue = false,
     )
 
     /**
+     * Transition used while swiping between home screen pages. See PagedView.PAGE_TRANSITION_*;
+     * 0 means the stock behaviour.
+     */
+    val pageTransitionEffect = preference(
+        key = intPreferencesKey(name = "page_transition_effect"),
+        defaultValue = if (cubePageTransition.firstBlocking()) 1 else 0,
+    )
+
+    /**
      * Blocking read for Java call sites that apply the effect on the main thread (once per
      * resume). The value is served from the in-memory preference cache.
      */
-    fun isCubePageTransitionEnabled(): Boolean = cubePageTransition.firstBlocking()
+    fun getPageTransitionEffectValue(): Int = pageTransitionEffect.firstBlocking()
 
     val deckLayout = preference(
         key = booleanPreferencesKey(name = "enable_lawn_deck"),

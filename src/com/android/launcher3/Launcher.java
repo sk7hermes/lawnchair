@@ -1254,9 +1254,8 @@ public class Launcher extends StatefulActivity<LauncherState>
         if (mWorkspace == null) {
             return;
         }
-        final boolean cube = PreferenceManager2.getInstance(this).isCubePageTransitionEnabled();
         mWorkspace.setPageTransitionEffect(
-                cube ? PagedView.PAGE_TRANSITION_CUBE : PagedView.PAGE_TRANSITION_NONE);
+                PreferenceManager2.getInstance(this).getPageTransitionEffectValue());
     }
 
     @Override

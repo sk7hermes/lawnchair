@@ -43,6 +43,8 @@ import app.lawnchair.ui.preferences.components.OverlayHandlerPreference
 import app.lawnchair.ui.preferences.components.controls.ClickablePreference
 import app.lawnchair.ui.preferences.components.controls.ListPreference
 import app.lawnchair.ui.preferences.components.controls.SliderPreference
+import app.lawnchair.ui.preferences.components.controls.ListPreference
+import app.lawnchair.ui.preferences.components.controls.ListPreferenceEntry
 import app.lawnchair.ui.preferences.components.controls.SwitchPreference
 import app.lawnchair.ui.preferences.components.layout.ExpandAndShrink
 import app.lawnchair.ui.preferences.components.layout.PreferenceGroup
@@ -163,10 +165,17 @@ fun HomeScreenPreferences(
                 adapter = prefs2.closingAppOverlay.getAdapter(),
                 label = stringResource(id = R.string.app_closing_animation),
             )
-            SwitchPreference(
-                adapter = prefs2.cubePageTransition.getAdapter(),
-                label = stringResource(id = R.string.page_transition_cube_label),
-                description = stringResource(id = R.string.page_transition_cube_description),
+            ListPreference(
+                adapter = prefs2.pageTransitionEffect.getAdapter(),
+                entries = listOf(
+                    ListPreferenceEntry(0) { stringResource(R.string.page_transition_none) },
+                    ListPreferenceEntry(1) { stringResource(R.string.page_transition_cube) },
+                    ListPreferenceEntry(2) { stringResource(R.string.page_transition_tablet) },
+                    ListPreferenceEntry(3) { stringResource(R.string.page_transition_flip) },
+                    ListPreferenceEntry(4) { stringResource(R.string.page_transition_in_and_out) },
+                    ListPreferenceEntry(5) { stringResource(R.string.page_transition_glass) },
+                ),
+                label = stringResource(id = R.string.page_transition_effect),
             )
         }
         PreferenceGroup(heading = stringResource(id = R.string.wallpaper)) {

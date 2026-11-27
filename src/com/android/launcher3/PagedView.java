@@ -84,6 +84,14 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     public static final int PAGE_TRANSITION_NONE = 0;
     /** Pages are rotated in 3D around the edge they share with the neighbouring page. */
     public static final int PAGE_TRANSITION_CUBE = 1;
+    /** Slab-like tilt, as if the whole screen were one solid board. */
+    public static final int PAGE_TRANSITION_TABLET = 2;
+    /** The page turns over completely while it travels. */
+    public static final int PAGE_TRANSITION_FLIP = 3;
+    /** The outgoing page shrinks away from the edge and the incoming one grows into place. */
+    public static final int PAGE_TRANSITION_IN_AND_OUT = 4;
+    /** Parallel panes that glide past each other with a shallow tilt. */
+    public static final int PAGE_TRANSITION_GLASS = 5;
 
     private static final float CUBE_MAX_ROTATION = 90f;
     /** Extra size at the middle of the swipe; 0.22 means the page reaches 1.22x. */
@@ -91,6 +99,10 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     /** Forward push towards the viewer, as a fraction of the viewport width. */
     private static final float CUBE_DEPTH_GAIN = 0.10f;
     private static final float CUBE_CAMERA_DENSITY = 800f;
+    private static final float TABLET_MAX_ROTATION = 12.5f;
+    private static final float FLIP_MAX_ROTATION = -180f;
+    private static final float GLASS_MAX_ROTATION = 12.5f;
+    private static final float GLASS_SCALE_DROP = 0.3f;
     private static final float CUBE_FADE_START = 0.85f;
     private static final float DEFAULT_CAMERA_DISTANCE_DP = 1280f;
 
@@ -2205,38 +2217,85 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
                 fraction = -fraction;
             }
             final float distance = Math.abs(fraction);
-            if (distance >= 1f) {
-                // Fully outside the viewport: make sure no stale transform survives.
-                resetPageTransition(child);
-                continue;
-            }
-            if (distance < 0.001f) {
+            if (distance >= 1f || distance < 0.001f) {
+                // Fully outside the viewport or at rest: make sure no stale transform survives.
                 resetPageTransition(child);
                 continue;
             }
             active = true;
-            // The page grows a little while it is half way between two positions and shrinks
-            // back to its final size at both ends, so the hinge reads as being closer.
-            final float scale = 1f + CUBE_SCALE_GAIN
-                    * (0.5f - Math.abs(0.5f - distance)) / 0.5f;
             child.setPivotY(child.getHeight() / 2f);
-            // Hinge is the edge that faces the neighbouring page.
-            child.setPivotX(fraction > 0 ? 0f : pageWidth);
-            child.setScaleX(scale);
-            child.setScaleY(scale);
-            child.setRotationY(CUBE_MAX_ROTATION * fraction);
             child.setCameraDistance(cameraDistance);
-            child.setTranslationZ(CUBE_DEPTH_GAIN * viewportWidth * distance);
-            child.setAlpha(distance > CUBE_FADE_START
-                    ? 1f - (distance - CUBE_FADE_START) / (1f - CUBE_FADE_START)
-                    : 1f);
+            applyPageTransition(child, fraction, distance, pageWidth, viewportWidth);
         }
         mPageTransitionActive = active;
     }
 
+    /** Applies the transform of the selected effect to a single page. */
+    private void applyPageTransition(View child, float fraction, float distance,
+            float pageWidth, int viewportWidth) {
+        child.setTranslationX(0f);
+        child.setTranslationZ(0f);
+        child.setRotationX(0f);
+        child.setAlpha(1f);
+        child.setScaleX(1f);
+        child.setScaleY(1f);
+
+        switch (mPageTransitionEffect) {
+            case PAGE_TRANSITION_CUBE: {
+                // The page grows a little while it is half way between two positions and shrinks
+                // back to its final size at both ends, so the hinge reads as being closer.
+                final float scale = 1f + CUBE_SCALE_GAIN
+                        * (0.5f - Math.abs(0.5f - distance)) / 0.5f;
+                // Hinge is the edge that faces the neighbouring page.
+                child.setPivotX(fraction > 0 ? 0f : pageWidth);
+                child.setScaleX(scale);
+                child.setScaleY(scale);
+                child.setRotationY(CUBE_MAX_ROTATION * fraction);
+                child.setTranslationZ(CUBE_DEPTH_GAIN * viewportWidth * distance);
+                child.setAlpha(distance > CUBE_FADE_START
+                        ? 1f - (distance - CUBE_FADE_START) / (1f - CUBE_FADE_START)
+                        : 1f);
+                break;
+            }
+            case PAGE_TRANSITION_TABLET: {
+                child.setPivotX(pageWidth / 2f);
+                child.setRotationY(TABLET_MAX_ROTATION * fraction);
+                break;
+            }
+            case PAGE_TRANSITION_FLIP: {
+                child.setPivotX(pageWidth / 2f);
+                final float scale = 1f - 0.5f * (0.5f - Math.abs(0.5f - distance));
+                child.setScaleX(scale);
+                child.setScaleY(scale);
+                child.setRotationY(FLIP_MAX_ROTATION * fraction);
+                // Past the halfway point the page shows its back, so it is hidden.
+                child.setAlpha(distance < 0.5f ? 1f : 0f);
+                break;
+            }
+            case PAGE_TRANSITION_IN_AND_OUT: {
+                child.setPivotX(pageWidth);
+                final float scale = 1f - Math.min(distance, 0.5f);
+                child.setScaleX(scale);
+                child.setScaleY(scale);
+                child.setTranslationX(Math.min(0f, fraction) * pageWidth);
+                break;
+            }
+            case PAGE_TRANSITION_GLASS: {
+                child.setPivotX(pageWidth / 2f);
+                final float scale = 1f - GLASS_SCALE_DROP * distance;
+                child.setScaleX(scale);
+                child.setScaleY(scale);
+                child.setRotationY(GLASS_MAX_ROTATION * fraction);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
     /**
-     * Camera distance for the cube, in pixels. A large distance keeps the perspective shallow, so
-     * the far edge of a turned page does not shrink away to nothing.
+     * Camera distance for the turned pages, in pixels. A large distance keeps the perspective
+     * shallow, so the far edge of a turned page does not shrink away to nothing.
      */
     private float getCubeCameraDistance() {
         final float density = getResources().getDisplayMetrics().density;
@@ -2258,13 +2317,14 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
         // values, so other animations keep their own alpha/scale.
         final boolean transformed = child.getRotationY() != 0f
                 || child.getScaleX() != 1f || child.getScaleY() != 1f
-                || child.getTranslationZ() != 0f;
+                || child.getTranslationZ() != 0f || child.getTranslationX() != 0f;
         if (!transformed) {
             return;
         }
         child.setRotationY(0f);
         child.setScaleX(1f);
         child.setScaleY(1f);
+        child.setTranslationX(0f);
         child.setTranslationZ(0f);
         child.setAlpha(1f);
         child.setPivotX(child.getWidth() / 2f);
