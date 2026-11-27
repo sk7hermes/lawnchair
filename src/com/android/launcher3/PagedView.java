@@ -86,8 +86,12 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     public static final int PAGE_TRANSITION_CUBE = 1;
 
     private static final float CUBE_MAX_ROTATION = 90f;
-    private static final float CUBE_CAMERA_DENSITY = 800f;
-    private static final float CUBE_FADE_START = 0.75f;
+    /** Extra size at the middle of the swipe; 0.22 means the page reaches 1.22x. */
+    private static final float CUBE_SCALE_GAIN = 0.22f;
+    /** Forward push towards the viewer, as a fraction of the viewport width. */
+    private static final float CUBE_DEPTH_GAIN = 0.06f;
+    private static final float CUBE_CAMERA_FACTOR = 2.5f;
+    private static final float CUBE_FADE_START = 0.85f;
     private static final float DEFAULT_CAMERA_DISTANCE_DP = 1280f;
 
     private int mPageTransitionEffect = PAGE_TRANSITION_NONE;
@@ -2175,7 +2179,7 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
 
         final int scrollX = getScrollX();
         final float viewportCenter = getPaddingLeft() + viewportWidth / 2f;
-        final float cameraDistance = getCubeCameraDistance();
+        final float cameraDistance = getCubeCameraDistance(viewportWidth);
         boolean active = false;
 
         for (int i = 0; i < getChildCount(); i++) {
@@ -2200,17 +2204,18 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
                 continue;
             }
             active = true;
-            // The page grows towards the viewer while it is half way between two positions and
-            // shrinks back to its final size at both ends. The bell curve peaks in the middle.
-            final float scale = 1f + (0.5f - Math.abs(0.5f - distance));
+            // The page grows a little while it is half way between two positions and shrinks
+            // back to its final size at both ends, so the hinge reads as being closer.
+            final float scale = 1f + CUBE_SCALE_GAIN
+                    * (0.5f - Math.abs(0.5f - distance)) / 0.5f;
             child.setPivotY(child.getHeight() / 2f);
-            // Hinge is the outer edge, so the edge facing the neighbour swings towards the
-            // viewer while the page turns away.
-            child.setPivotX(fraction > 0 ? pageWidth : 0f);
+            // Hinge is the edge that faces the neighbouring page.
+            child.setPivotX(fraction > 0 ? 0f : pageWidth);
             child.setScaleX(scale);
             child.setScaleY(scale);
-            child.setRotationY(-CUBE_MAX_ROTATION * fraction);
+            child.setRotationY(CUBE_MAX_ROTATION * fraction);
             child.setCameraDistance(cameraDistance);
+            child.setTranslationZ(CUBE_DEPTH_GAIN * viewportWidth * distance);
             child.setAlpha(distance > CUBE_FADE_START
                     ? 1f - (distance - CUBE_FADE_START) / (1f - CUBE_FADE_START)
                     : 1f);
@@ -2219,12 +2224,11 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     }
 
     /**
-     * Camera distance for the cube, in pixels. The perspective is deliberately shallow so the
-     * pages stay readable while they turn.
+     * Camera distance for the cube, in pixels, relative to the page width. Larger values flatten
+     * the perspective.
      */
-    private float getCubeCameraDistance() {
-        final float density = getResources().getDisplayMetrics().density;
-        return CUBE_CAMERA_DENSITY * density * density;
+    private float getCubeCameraDistance(int viewportWidth) {
+        return viewportWidth * CUBE_CAMERA_FACTOR;
     }
 
     private void resetPageTransitions() {
@@ -2241,13 +2245,15 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
         // Only undo the properties this effect writes, and only when they still carry our
         // values, so other animations keep their own alpha/scale.
         final boolean transformed = child.getRotationY() != 0f
-                || child.getScaleX() != 1f || child.getScaleY() != 1f;
+                || child.getScaleX() != 1f || child.getScaleY() != 1f
+                || child.getTranslationZ() != 0f;
         if (!transformed) {
             return;
         }
         child.setRotationY(0f);
         child.setScaleX(1f);
         child.setScaleY(1f);
+        child.setTranslationZ(0f);
         child.setAlpha(1f);
         child.setPivotX(child.getWidth() / 2f);
         child.setPivotY(child.getHeight() / 2f);
