@@ -102,9 +102,14 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     private static final float TABLET_ANGLE = 20f;
     private static final float TABLET_CAMERA_PAGES = 1.5f;
     private static final float CAMERA_UNITS_PER_INCH = 72f;
-    private static final float FLIP_MAX_ROTATION = 90f;
+    private static final float FLIP_MAX_ROTATION = 180f;
     private static final float FLIP_CAMERA_DENSITY = 12000f;
-    private static final float IN_AND_OUT_DEPTH = 0.3f;
+    /** How far the leaving page shrinks while it recedes. */
+    private static final float IN_AND_OUT_RECEDE = 0.25f;
+    /** How far back it is pushed, as a fraction of the viewport width. */
+    private static final float IN_AND_OUT_DEPTH = 0.08f;
+    /** How much of the distance the arriving page closes up. */
+    private static final float IN_AND_OUT_GAP = 0.35f;
     private static final float GLASS_SCALE_GAIN = 0.08f;
     private static final float CUBE_FADE_START = 0.85f;
     private static final float DEFAULT_CAMERA_DISTANCE_DP = 1280f;
@@ -2269,22 +2274,29 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
                 break;
             }
             case PAGE_TRANSITION_FLIP: {
-                // The page turns edge-on as it leaves, the next one unfolds from the same edge,
-                // so the two faces read as the two sides of one sheet.
+                // Both pages are stacked in the middle of the screen and turn around their own
+                // vertical axis, so the incoming page reads as the back of a turning sheet.
+                child.setTranslationX(-fraction * pageWidth);
                 child.setCameraDistance(getFlipCameraDistance());
                 child.setPivotX(pageWidth / 2f);
                 child.setRotationY(FLIP_MAX_ROTATION * fraction);
-                // Only the half of the turn that faces the viewer is drawn.
+                // Only the side that faces the viewer is drawn.
                 child.setAlpha(distance > 0.5f ? 0f : 1f);
                 break;
             }
             case PAGE_TRANSITION_IN_AND_OUT: {
-                // Deepest dip exactly between two pages, flat at both ends.
-                final float dip = 1f - Math.abs(1f - 2f * distance);
-                final float scale = 1f - IN_AND_OUT_DEPTH * dip;
-                child.setPivotX(pageWidth / 2f);
-                child.setScaleX(scale);
-                child.setScaleY(scale);
+                if (fraction < 0f) {
+                    // The page that is left behind recedes: it shrinks and is pushed back.
+                    final float scale = 1f - IN_AND_OUT_RECEDE * distance;
+                    child.setPivotX(pageWidth / 2f);
+                    child.setScaleX(scale);
+                    child.setScaleY(scale);
+                    child.setTranslationZ(-IN_AND_OUT_DEPTH * viewportWidth * distance);
+                } else {
+                    // The next page follows closely instead of a full page behind.
+                    child.setPivotX(pageWidth / 2f);
+                    child.setTranslationX(-IN_AND_OUT_GAP * fraction * pageWidth);
+                }
                 break;
             }
             case PAGE_TRANSITION_GLASS: {
