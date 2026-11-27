@@ -87,7 +87,7 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
 
     private static final float CUBE_MAX_ROTATION = 90f;
     /** Extra size at the middle of the swipe; 0.22 means the page reaches 1.22x. */
-    private static final float CUBE_SCALE_GAIN = 0.22f;
+    private static final float CUBE_SCALE_GAIN = 0.40f;
     /** Forward push towards the viewer, as a fraction of the viewport width. */
     private static final float CUBE_DEPTH_GAIN = 0.10f;
     private static final float CUBE_CAMERA_DENSITY = 800f;
