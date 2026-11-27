@@ -2263,21 +2263,28 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
                 break;
             }
             case PAGE_TRANSITION_FLIP: {
+                // Both pages are stacked in the middle of the screen and turn around their own
+                // centre, so the incoming page appears as the back of the sheet.
+                child.setTranslationX(-fraction * pageWidth);
                 child.setPivotX(pageWidth / 2f);
                 final float scale = 1f - 0.5f * (0.5f - Math.abs(0.5f - distance));
                 child.setScaleX(scale);
                 child.setScaleY(scale);
                 child.setRotationY(FLIP_MAX_ROTATION * fraction);
-                // Past the halfway point the page shows its back, so it is hidden.
+                // Only the half of the turn that faces the viewer is drawn.
                 child.setAlpha(distance < 0.5f ? 1f : 0f);
                 break;
             }
             case PAGE_TRANSITION_IN_AND_OUT: {
+                // The leaving page shrinks towards its outer edge and additionally slides away,
+                // the arriving one only grows while it is carried in by the pager.
                 child.setPivotX(pageWidth);
-                final float scale = 1f - Math.min(distance, 0.5f);
+                final float scale = Math.max(0.5f, 1f - distance);
                 child.setScaleX(scale);
                 child.setScaleY(scale);
-                child.setTranslationX(Math.min(0f, fraction) * pageWidth);
+                child.setTranslationX(fraction < 0f
+                        ? Math.max(-0.5f * pageWidth, fraction * pageWidth)
+                        : 0f);
                 break;
             }
             case PAGE_TRANSITION_GLASS: {
