@@ -86,12 +86,12 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     public static final int PAGE_TRANSITION_CUBE = 1;
 
     private static final float CUBE_MAX_ROTATION = 90f;
-    private static final float CUBE_CAMERA_DISTANCE_FACTOR = 3f;
+    private static final float CUBE_CAMERA_DENSITY = 800f;
+    private static final float CUBE_FADE_START = 0.75f;
     private static final float DEFAULT_CAMERA_DISTANCE_DP = 1280f;
 
     private int mPageTransitionEffect = PAGE_TRANSITION_NONE;
     private boolean mPageTransitionActive;
-    private Boolean mOriginalClipChildren;
     private float mDefaultCameraDistance = -1;
 
     private static final float RETURN_TO_ORIGINAL_PAGE_THRESHOLD = 0.33f;
@@ -2140,14 +2140,6 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
         mPageTransitionEffect = effect;
         if (effect == PAGE_TRANSITION_NONE) {
             resetPageTransitions();
-            if (mOriginalClipChildren != null) {
-                setClipChildren(mOriginalClipChildren);
-            }
-        } else {
-            if (mOriginalClipChildren == null) {
-                mOriginalClipChildren = getClipChildren();
-            }
-            setClipChildren(false);
         }
         invalidate();
     }
@@ -2183,7 +2175,7 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
 
         final int scrollX = getScrollX();
         final float viewportCenter = getPaddingLeft() + viewportWidth / 2f;
-        final float cameraDistance = viewportWidth * CUBE_CAMERA_DISTANCE_FACTOR;
+        final float cameraDistance = getCubeCameraDistance();
         boolean active = false;
 
         for (int i = 0; i < getChildCount(); i++) {
@@ -2197,23 +2189,42 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
             if (mIsRtl) {
                 fraction = -fraction;
             }
-            if (Math.abs(fraction) >= 1f) {
+            final float distance = Math.abs(fraction);
+            if (distance >= 1f) {
                 // Fully outside the viewport: make sure no stale transform survives.
                 resetPageTransition(child);
                 continue;
             }
-            if (Math.abs(fraction) < 0.001f) {
+            if (distance < 0.001f) {
                 resetPageTransition(child);
                 continue;
             }
             active = true;
+            // The page grows towards the viewer while it is half way between two positions and
+            // shrinks back to its final size at both ends. The bell curve peaks in the middle.
+            final float scale = 1f + (0.5f - Math.abs(0.5f - distance));
             child.setPivotY(child.getHeight() / 2f);
-            // The page turns around the edge it shares with its neighbour.
-            child.setPivotX(fraction > 0 ? 0f : pageWidth);
-            child.setRotationY(CUBE_MAX_ROTATION * fraction);
+            // Hinge is the outer edge, so the edge facing the neighbour swings towards the
+            // viewer while the page turns away.
+            child.setPivotX(fraction > 0 ? pageWidth : 0f);
+            child.setScaleX(scale);
+            child.setScaleY(scale);
+            child.setRotationY(-CUBE_MAX_ROTATION * fraction);
             child.setCameraDistance(cameraDistance);
+            child.setAlpha(distance > CUBE_FADE_START
+                    ? 1f - (distance - CUBE_FADE_START) / (1f - CUBE_FADE_START)
+                    : 1f);
         }
         mPageTransitionActive = active;
+    }
+
+    /**
+     * Camera distance for the cube, in pixels. The perspective is deliberately shallow so the
+     * pages stay readable while they turn.
+     */
+    private float getCubeCameraDistance() {
+        final float density = getResources().getDisplayMetrics().density;
+        return CUBE_CAMERA_DENSITY * density * density;
     }
 
     private void resetPageTransitions() {
@@ -2227,9 +2238,17 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
         if (child == null) {
             return;
         }
-        if (child.getRotationY() != 0f) {
-            child.setRotationY(0f);
+        // Only undo the properties this effect writes, and only when they still carry our
+        // values, so other animations keep their own alpha/scale.
+        final boolean transformed = child.getRotationY() != 0f
+                || child.getScaleX() != 1f || child.getScaleY() != 1f;
+        if (!transformed) {
+            return;
         }
+        child.setRotationY(0f);
+        child.setScaleX(1f);
+        child.setScaleY(1f);
+        child.setAlpha(1f);
         child.setPivotX(child.getWidth() / 2f);
         child.setPivotY(child.getHeight() / 2f);
         child.setCameraDistance(getDefaultCameraDistance());
