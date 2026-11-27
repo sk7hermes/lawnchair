@@ -108,6 +108,8 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
     private static final float IN_AND_OUT_RECEDE = 0.25f;
     /** How far back it is pushed, as a fraction of the viewport width. */
     private static final float IN_AND_OUT_DEPTH = 0.08f;
+    /** How far both pages are pulled together, as a fraction of the page width. */
+    private static final float IN_AND_OUT_CLOSENESS = 0.25f;
     /** Size of the arriving page when it is still one page away. */
     private static final float IN_AND_OUT_START_SCALE = 0.5f;
     private static final float GLASS_SCALE_GAIN = 0.08f;
@@ -2286,8 +2288,10 @@ public abstract class PagedView<T extends View & PageIndicator> extends ViewGrou
             }
             case PAGE_TRANSITION_IN_AND_OUT: {
                 // The leaving page recedes into the distance, the arriving one comes in small and
-                // grows forward into place.
+                // grows forward into place. Both are pulled towards the middle, so the gap
+                // between them stays narrow.
                 child.setPivotX(pageWidth / 2f);
+                child.setTranslationX(-IN_AND_OUT_CLOSENESS * fraction * pageWidth);
                 final float scale;
                 if (fraction < 0f) {
                     scale = 1f - IN_AND_OUT_RECEDE * distance;
